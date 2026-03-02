@@ -1,4 +1,5 @@
 🎬 Bramflix v2.0 🚀
+
 A professional, high-performance automated media & infrastructure stack. This project demonstrates advanced Docker Compose orchestration, GPU Passthrough for hardware transcoding, and a full GitOps workflow.
 
 🏗️ System Architecture
