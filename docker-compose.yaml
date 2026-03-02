@@ -1,0 +1,179 @@
+services:
+  homarr:
+    container_name: homarr
+    networks:
+      - bramflix_net
+    image: ghcr.io/homarr-labs/homarr:latest
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./homarr/appdata:/appdata
+    environment:
+      - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY}
+    ports:
+      - '7575:7575'
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true  # <--- CRITICAL: New requirement for Seerr
+    networks:
+      - bramflix_net
+    environment:
+      - TZ=Asia/Jerusalem
+      - LOG_LEVEL=debug
+      - PUID=1000  # Optional but recommended to match ownership
+      - PGID=1000
+    volumes:
+      - /opt/bramflix/jellyseerr/config:/app/config
+    ports:
+      - "5055:5055"
+    restart: unless-stopped
+
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    networks:
+      - bramflix_net
+    ports:
+      - "8096:8096"
+    environment:
+      - TZ=Asia/Jerusalem
+      - MALLOC_TRIM_THRESHOLD_=100000
+    volumes:
+      - /opt/bramflix/jellyfin/config:/config
+      - /opt/bramflix/jellyfin/cache:/cache
+      - /mnt/bramflix_pool:/data
+      - /mnt/transcodes:/transcodes
+      - /etc/letsencrypt/live/media.brami.co.il:/certs:ro
+    devices:
+      - /dev/dri:/dev/dri
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  jellyfin-exporter:
+    image: rebelcore/jellyfin-exporter:latest
+    container_name: jellyfin-exporter
+    networks:
+      - bramflix_net
+    command:
+      - --jellyfin.address=http://jellyfin:8096
+      - --jellyfin.token=${JELLYFIN_TOKEN}
+    ports:
+      - "9594:9594"
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    restart: unless-stopped
+    networks:
+      - bramflix_net
+    ports:
+      - "7878:7878"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Jerusalem
+    volumes:
+      - /opt/bramflix/radarr/config:/config
+      - /mnt/bramflix_pool:/data
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    restart: unless-stopped
+    networks:
+      - bramflix_net
+    ports:
+      - "8989:8989"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Jerusalem
+    volumes:
+      - /opt/bramflix/sonarr/config:/config
+      - /mnt/bramflix_pool:/data
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    restart: unless-stopped
+    networks:
+      - bramflix_net
+    ports:
+      - "6767:6767"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Jerusalem
+    volumes:
+      - /opt/bramflix/bazarr/config:/config
+      - /mnt/bramflix_pool:/data
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    restart: unless-stopped
+    networks:
+      - bramflix_net
+    ports:
+      - "9696:9696"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Jerusalem
+    volumes:
+      - /opt/bramflix/prowlarr/config:/config
+
+  jellystat-db:
+    image: postgres:15
+    container_name: jellystat-db
+    networks:
+      - bramflix_net
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jellystat
+      POSTGRES_USER: jellystat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - jellystat_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jellystat -d jellystat"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  jellystat:
+    image: cyfershepard/jellystat:latest
+    container_name: jellystat
+    networks:
+      - bramflix_net
+    restart: unless-stopped
+    depends_on:
+      jellystat-db:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+    environment:
+      POSTGRES_IP: jellystat-db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: jellystat
+      POSTGRES_USER: jellystat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - jellystat_data:/app/data
+
+volumes:
+  jellystat_db:
+  jellystat_data:
+
+networks:
+  bramflix_net:
+    driver: bridge
