@@ -44,7 +44,6 @@ services:
       - /opt/bramflix/jellyfin/cache:/cache
       - /mnt/bramflix_pool:/data
       - /mnt/transcodes:/transcodes
-      - /etc/letsencrypt/live/media.brami.co.il:/certs:ro
     devices:
       - /dev/dri:/dev/dri
     deploy:
